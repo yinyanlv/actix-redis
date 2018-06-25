@@ -48,7 +48,7 @@ impl SessionImpl for RedisSession {
     fn write(&self, resp: HttpResponse) -> Result<MiddlewareResponse> {
         if self.changed {
             Ok(MiddlewareResponse::Future(self.inner.update(
-                &self.state,
+                &mut self.state.clone(),
                 resp,
                 self.value.as_ref(),
             )))
@@ -230,7 +230,7 @@ impl Inner {
     }
 
     fn update(
-        &self, state: &HashMap<String, String>, mut resp: HttpResponse,
+        &self, state: &mut HashMap<String, String>, mut resp: HttpResponse,
         value: Option<&String>,
     ) -> Box<Future<Item = HttpResponse, Error = Error>> {
         let (value, jar) = if let Some(value) = value {
@@ -262,6 +262,9 @@ impl Inner {
 
             (value, Some(jar))
         };
+
+        // store the key of session, so you can get the key of session by req.session().get::<String>("_redis_key")
+        state.insert("_redis_key".to_owned(), value.clone());
 
         Box::new(match serde_json::to_string(state) {
             Err(e) => Either::A(FutErr(e.into())),
